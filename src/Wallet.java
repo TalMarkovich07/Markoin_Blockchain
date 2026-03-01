@@ -21,7 +21,7 @@ public class Wallet {
         publicKey = G.modPow(privateKey, P); //public key will be G (a small prime) to the power of the privateKey, module P (a large prime)
     }
 
-    public BigInteger sign(String data) {
+    public static BigInteger sign(String data, BigInteger privateKey) {
         //'encrypt' given data's hash with private key. decryption can only be done using public key.
         String hexHash = Block.calculateHash(data);
         BigInteger m = new BigInteger(hexHash, 16);
@@ -30,4 +30,13 @@ public class Wallet {
     public String getAddress() {
         return publicKey.toString(16);
     }
+
+    public static Transaction sendMoney(BigInteger privateSender, BigInteger publicSender, BigInteger publicRecipient, double amount) {
+        Transaction tr = new Transaction(publicSender, publicRecipient, amount);
+        String trData = tr.getTransactionData();
+        tr.setSignature(sign(trData, privateSender));
+        return tr;
+
+    }
+
 }
