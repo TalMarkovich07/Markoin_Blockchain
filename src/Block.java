@@ -22,6 +22,9 @@ public class Block {
         this.nonce = 0;
         this.hash = calculateBlockHash();
     }
+    public ArrayList<Transaction> getTransactions(){
+        return this.data;
+    }
     public void mineBlock(){
         String target = new String(new char[difficulty]).replace('\0', '0');
         while(!hash.substring(0, difficulty).equals(target)){

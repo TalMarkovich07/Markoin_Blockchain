@@ -16,6 +16,16 @@ public class Transaction {
         this.amount = amount;
     }
 
+    public BigInteger getSenderPublicKey() {
+        return senderPublicKey;
+    }
+    public BigInteger getRecipientPublicKey() {
+        return recipientPublicKey;
+    }
+    public double getAmount() {
+        return amount;
+    }
+
     public String getTransactionData() {
         return  Integer.toString(transactionID) + senderPublicKey + recipientPublicKey + amount;
     }
