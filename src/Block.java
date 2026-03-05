@@ -1,6 +1,7 @@
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 public class Block implements Serializable {
     public static int difficulty = 3;
@@ -8,6 +9,9 @@ public class Block implements Serializable {
     private String previousHash;
     private ArrayList<Transaction> data; //later change to <Transaction>
     private long timeStamp;
+
+    private List<Integer> previousSolution;
+    private Graph riddle;
     private int nonce;
 
     public Block(ArrayList<Transaction> data, String previousHash) {
