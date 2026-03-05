@@ -1,3 +1,5 @@
+import model.Block;
+
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
@@ -40,7 +42,7 @@ public class Main {
                             Block b = (Block) received;
                             System.out.println("\n[Block Received] Hash: " + b.getHash());
                             if(blockchain.addBlock(b))
-                                System.out.println("\n[Block Added] Hash: " + b.getHash());
+                                System.out.println("[Block Added] Hash: " + b.getHash());
                         }
                         System.out.print("> ");
                     } catch (Exception e) {
@@ -59,12 +61,12 @@ public class Main {
             String choice = sc.nextLine();
 
             if (choice.equals("1")) {
-                Block newBlock = new Block(new ArrayList<>(), "Hash-" + System.currentTimeMillis());
+                Block newBlock = new Block(new ArrayList<>(), blockchain.lastBlock());
                 broadcastBlock(newBlock);
             } else if (choice.equals("2")) {
                 System.out.println("Connected peers: " + peerPorts);
             } else if (choice.equals("3")) {
-                System.out.println(blockchain.toString());
+                blockchain.printChain();
             }
         }
     }

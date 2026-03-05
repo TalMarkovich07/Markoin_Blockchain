@@ -1,3 +1,6 @@
+import model.Block;
+import model.Transaction;
+
 import java.math.BigInteger;
 import java.security.SecureRandom;
 

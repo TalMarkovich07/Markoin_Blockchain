@@ -1,3 +1,6 @@
+import model.Block;
+import model.Transaction;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.math.BigInteger;
@@ -12,6 +15,9 @@ public class Chain {
         balances = new HashMap<>();
         Blockchain = new ArrayList<>();
         Mempool = new ArrayList<>();
+
+        Block first = new Block();
+        Blockchain.add(first);
     }
 
     public static Chain getInstance(){
@@ -60,7 +66,11 @@ public class Chain {
         Blockchain.add(block);
         return true;
     }
-    public String toString(){
-        return Blockchain.toString();
+    public void printChain(){
+        for(Block block : Blockchain)
+            System.out.println(block.toString());
+    }
+    public Block lastBlock(){
+        return Blockchain.get(Blockchain.size()-1);
     }
 }

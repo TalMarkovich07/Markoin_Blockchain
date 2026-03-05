@@ -1,6 +1,7 @@
+package model;
+
 import java.io.Serializable;
 import java.math.BigInteger;
-import java.security.PublicKey;
 
 public class Transaction implements Serializable {
     private static int counter = 0;
