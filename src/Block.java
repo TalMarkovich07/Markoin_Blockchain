@@ -1,7 +1,8 @@
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
 
-public class Block {
+public class Block implements Serializable {
     public static int difficulty = 3;
     private String hash;
     private String previousHash;
@@ -50,5 +51,11 @@ public class Block {
         }
         return Long.toHexString(hash);
     }
+    public String getHash(){ return hash; }
+    public String getPreviousHash(){ return previousHash; }
+    public ArrayList<Transaction> getData(){ return data; }
 
+    public String toString(){
+        return timeStamp+":\nBlock's hash: "+hash+"\nprevious block's hash:"+previousHash+"\n"+data.toString();
+    }
 }

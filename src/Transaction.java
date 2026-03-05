@@ -1,7 +1,8 @@
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.security.PublicKey;
 
-public class Transaction {
+public class Transaction implements Serializable {
     private static int counter = 0;
     private int transactionID;
     private BigInteger senderPublicKey;

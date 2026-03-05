@@ -54,9 +54,13 @@ public class Chain {
     public boolean valid(Block block){
         return true;
     } // later change
-    public void addBlock(Block block){
+    public boolean addBlock(Block block){
         if(!valid(block))
-            throw new RuntimeException("Invalid block");
+            return false;
         Blockchain.add(block);
+        return true;
+    }
+    public String toString(){
+        return Blockchain.toString();
     }
 }
