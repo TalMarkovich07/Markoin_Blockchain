@@ -43,8 +43,20 @@ public class Chain {
             return balances.get(publicKey);
         return null;
     }
-    public void setBalance(BigInteger publicKey, Double balance){
-        balances.put(publicKey, balance);
+    public void updateBalance(Transaction tr){
+        BigInteger sender = tr.getSenderPublicKey();
+        BigInteger receiver = tr.getRecipientPublicKey();
+        Double amount = tr.getAmount();
+        if(!balances.containsKey(sender))
+            throw new RuntimeException("sender does not exist");
+        if(!balances.containsKey(receiver))
+            throw new RuntimeException("receiver does not exist");
+        if(balances.get(sender) < amount)
+            throw new RuntimeException("sender is out of balance");
+
+        balances.put(sender, balances.get(sender) - amount);
+        balances.put(receiver, balances.get(receiver) + amount);
+
     }
     public void transferAmount(Transaction tr) {
         BigInteger from = tr.getSenderPublicKey();
@@ -63,7 +75,7 @@ public class Chain {
         balances.put(from, sender-amount);
         balances.put(to, receiver+amount);
     }
-    public boolean valid(Block block){
+    public boolean isValidBlock(Block block){
         //checks if: solution to previous block is valid, if the hash is valid, if the previous hash is really the previous block's hash, and if all transactions are valid.
         Block last = Blockchain.getLast();
 
@@ -81,19 +93,35 @@ public class Chain {
         if(!last.getHash().equals(block.getPreviousHash()))
             return false;
 
-        // validate each transaction
+        // validate each transaction (signature and double spending)
         ArrayList<Transaction> transactions = block.getTransactions();
         HashMap<BigInteger, Double> tempBalances = new HashMap<>(this.balances);
-        for(Transaction transaction : transactions){
-            if(!transaction.verifySignature())
+        for(Transaction tr : transactions){
+            if(!tr.verifySignature())
                 return false;
 
-            
+            BigInteger sender = tr.getSenderPublicKey();
+            BigInteger recipient = tr.getRecipientPublicKey();
+            if(!tempBalances.containsKey(sender))
+                throw new RuntimeException("Non-existing sender");
+            if(!tempBalances.containsKey(recipient))
+                throw new RuntimeException("Non-existing recipient");
+
+            double amount = tr.getAmount();
+
+            double senderBalance = tempBalances.get(sender);
+            if(amount > senderBalance)
+                return false;
+            tempBalances.put(sender, senderBalance - amount);
+            tempBalances.put(recipient, tempBalances.get(recipient) + amount);
         }
 
         return true;
     }
     public void addBlock(Block block){
+        ArrayList<Transaction> transactions = block.getTransactions();
+        for(Transaction tr : transactions)
+            updateBalance(tr);
         Blockchain.add(block);
     }
     public void printChain(){

@@ -43,9 +43,8 @@ public class Main {
                             }
                         } else if (received instanceof Block b) {
                             System.out.println("\n[Block Received] Hash: " + b.getHash());
-                            if(blockchain.valid(b)){
+                            if(blockchain.isValidBlock(b)){
                                 blockchain.addBlock(b);
-                                System.out.println("\n[New Block Added] Stopping current mining...");
                                 stopMiningFlag.set(true);
                                 System.out.println("[Block Added] Hash: " + b.getHash());
                             }
@@ -76,7 +75,6 @@ public class Main {
                         long endTime = System.currentTimeMillis();
                         long duration = endTime - startTime;
                         System.out.println("[Block created] Hash: " + newBlock.getHash()+", mining time: "+duration);
-                        blockchain.addBlock(newBlock);
                         broadcastBlock(newBlock);
                     }
                 }).start();
@@ -105,7 +103,7 @@ public class Main {
     private static void broadcastBlock(Block block) {
         for (int port : peerPorts) {
             sendMessage(port, block);
-            System.out.println("Sent block to " + port);
+            System.out.println("Sent block: "+block.getHash()+" to " + port);
         }
     }
 }
