@@ -19,7 +19,8 @@ public class Wallet {
     public double getBalance(){
         return 0;
     }
-
+    public BigInteger getPublicKey(){ return publicKey;}
+    public BigInteger getPrivateKey(){ return privateKey;} // later check if can change
     private void generateKeyPair(){ //
         SecureRandom r = new SecureRandom();
         privateKey = new BigInteger(256, r); //private key will be a large prime
