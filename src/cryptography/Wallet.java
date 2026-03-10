@@ -1,3 +1,5 @@
+package cryptography;
+
 import model.Block;
 import model.Transaction;
 
@@ -6,10 +8,10 @@ import java.security.SecureRandom;
 
 public class Wallet {
     private BigInteger privateKey;
-    public BigInteger publicKey;
+    private BigInteger publicKey;
 
-    private static final BigInteger G = BigInteger.valueOf(7);
-    private static final BigInteger P = new BigInteger("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1", 16);
+    public static final BigInteger G = BigInteger.valueOf(7);
+    public static final BigInteger P = new BigInteger("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1", 16);
 
     public Wallet(){
         generateKeyPair();

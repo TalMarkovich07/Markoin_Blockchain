@@ -1,3 +1,5 @@
+package logic;
+
 import model.Graph;
 
 import java.util.ArrayList;

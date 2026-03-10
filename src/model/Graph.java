@@ -20,7 +20,14 @@ public class Graph implements Serializable{
             adjList.get(destination).add(source);
         }
     }
-
+    public static Graph firstBlockGraph(int numVertices){
+        Graph graph = new Graph(numVertices);
+        int i = 0;
+        for(; i < numVertices-1; i++)
+            graph.addEdge(i, i+1);
+        graph.addEdge(0, i);
+        return graph;
+    }
     public List<Integer> getNeighbors(int vertex){
         return adjList.get(vertex);
     }
@@ -44,6 +51,44 @@ public class Graph implements Serializable{
             }
         }
         return graph;
+    }
+    public void printGraph() {
+        System.out.println("Graph Structure (Adjacency List):");
+        for (int i = 0; i < numVertices; i++) {
+            List<Integer> neighbors = adjList.get(i);
+            System.out.print("Vertex " + i + " is connected to: ");
+            if (neighbors.isEmpty()) {
+                System.out.print("No neighbors");
+            } else {
+                for (int j = 0; j < neighbors.size(); j++) {
+                    System.out.print(neighbors.get(j));
+                    if (j < neighbors.size() - 1) {
+                        System.out.print(", ");
+                    }
+                }
+            }
+            System.out.println();
+        }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Graph (").append(numVertices).append(" vertices):\n");
+
+        for (int i = 0; i < numVertices; i++) {
+            sb.append("  [").append(i).append("] -> {");
+            List<Integer> neighbors = adjList.get(i);
+
+            for (int j = 0; j < neighbors.size(); j++) {
+                sb.append(neighbors.get(j));
+                if (j < neighbors.size() - 1) {
+                    sb.append(", ");
+                }
+            }
+            sb.append("}\n");
+        }
+        return sb.toString();
     }
 
 

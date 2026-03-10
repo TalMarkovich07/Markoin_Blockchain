@@ -1,4 +1,5 @@
-import model.Block;
+import logic.*;
+import model.*;
 
 import java.io.*;
 import java.net.*;
@@ -6,10 +7,12 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Main {
     private static Set<Integer> peerPorts = new HashSet<>();
     private static int myPort;
+    private static AtomicBoolean stopMiningFlag = new AtomicBoolean(false);
 
     public static void main(String[] args) {
         Chain blockchain = Chain.getInstance();
@@ -38,11 +41,14 @@ public class Main {
                             if (peerPorts.add(newPeer)) {
                                 System.out.println("\n[Peer Confirmed: " + newPeer + "]");
                             }
-                        } else if (received instanceof Block) {
-                            Block b = (Block) received;
+                        } else if (received instanceof Block b) {
                             System.out.println("\n[Block Received] Hash: " + b.getHash());
-                            if(blockchain.addBlock(b))
+                            if(blockchain.valid(b)){
+                                blockchain.addBlock(b);
+                                System.out.println("\n[New Block Added] Stopping current mining...");
+                                stopMiningFlag.set(true);
                                 System.out.println("[Block Added] Hash: " + b.getHash());
+                            }
                         }
                         System.out.print("> ");
                     } catch (Exception e) {
@@ -61,8 +67,19 @@ public class Main {
             String choice = sc.nextLine();
 
             if (choice.equals("1")) {
-                Block newBlock = new Block(new ArrayList<>(), blockchain.lastBlock());
-                broadcastBlock(newBlock);
+                stopMiningFlag.set(false);
+                new Thread(() -> {
+                    long startTime = System.currentTimeMillis();
+                    Block newBlock = Block.mineBlock(new ArrayList<>(), blockchain.lastBlock(), stopMiningFlag);
+
+                    if (newBlock != null) {
+                        long endTime = System.currentTimeMillis();
+                        long duration = endTime - startTime;
+                        System.out.println("[Block created] Hash: " + newBlock.getHash()+", mining time: "+duration);
+                        blockchain.addBlock(newBlock);
+                        broadcastBlock(newBlock);
+                    }
+                }).start();
             } else if (choice.equals("2")) {
                 System.out.println("Connected peers: " + peerPorts);
             } else if (choice.equals("3")) {

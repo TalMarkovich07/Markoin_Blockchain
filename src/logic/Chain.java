@@ -1,9 +1,15 @@
+package logic;
+
 import model.Block;
 import model.Transaction;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.math.BigInteger;
+
+import static logic.HamiltonSolver.verifySolution;
+import static model.Block.difficulty;
+import static model.Block.firstBlock;
 
 public class Chain {
     private static Chain instance;
@@ -16,7 +22,7 @@ public class Chain {
         Blockchain = new ArrayList<>();
         Mempool = new ArrayList<>();
 
-        Block first = new Block();
+        Block first = firstBlock();
         Blockchain.add(first);
     }
 
@@ -28,7 +34,7 @@ public class Chain {
 
     public void addWallet(BigInteger publicKey){
         if(balances.containsKey(publicKey))
-            throw new RuntimeException("Wallet already exists");
+            throw new RuntimeException("cryptography.Wallet already exists");
         balances.put(publicKey, 0.0);
     }
 
@@ -58,13 +64,37 @@ public class Chain {
         balances.put(to, receiver+amount);
     }
     public boolean valid(Block block){
-        return true;
-    } // later change
-    public boolean addBlock(Block block){
-        if(!valid(block))
+        //checks if: solution to previous block is valid, if the hash is valid, if the previous hash is really the previous block's hash, and if all transactions are valid.
+        Block last = Blockchain.getLast();
+
+        // verify solution to previous block's riddle
+        if(!verifySolution(last.getRiddle(), block.getPreviousSolution()))
             return false;
-        Blockchain.add(block);
+
+        // verify the hash starts with the 'difficulty' amount of 1's
+        StringBuilder sb = new StringBuilder();
+        sb.append("1".repeat(difficulty));
+        if(!block.getHash().startsWith(sb.toString()))
+            return false;
+
+        //check that the block's previous hash is the last block's hash
+        if(!last.getHash().equals(block.getPreviousHash()))
+            return false;
+
+        // validate each transaction
+        ArrayList<Transaction> transactions = block.getTransactions();
+        HashMap<BigInteger, Double> tempBalances = new HashMap<>(this.balances);
+        for(Transaction transaction : transactions){
+            if(!transaction.verifySignature())
+                return false;
+
+            
+        }
+
         return true;
+    }
+    public void addBlock(Block block){
+        Blockchain.add(block);
     }
     public void printChain(){
         for(Block block : Blockchain)
