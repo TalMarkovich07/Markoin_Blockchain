@@ -8,14 +8,12 @@ import java.math.BigInteger;
 import java.util.Scanner;
 
 public class UserClient {
-    private static final String MINER_IP = "localhost";
-    private static int MINER_PORT = 8888;
+    private static final String MINER_IP = "127.0.0.1";
+    private static int port;
 
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
         System.out.println("--- Welcome to the Blockchain User Client ---");
-        System.out.println("Please enter your miner's port: ");
-        MINER_PORT = sc.nextInt();
         while(true){
             System.out.println("\nSelect an option:");
             System.out.println("1) Create New Wallet");
@@ -30,10 +28,15 @@ public class UserClient {
                     createNewWallet();
                     break;
                 case "2":
-                    System.out.println("Enter Public key to check");
+                    System.out.print("Enter Miner's port: ");
+                    port = sc.nextInt();
+                    sc.nextLine();
                     checkBalance(sc);
                     break;
                 case "3":
+                    System.out.print("Enter Miner's port: ");
+                    port = sc.nextInt();
+                    sc.nextLine();
                     sendTransaction(sc);
                     break;
                 case "4":
@@ -52,14 +55,19 @@ public class UserClient {
     }
 
     private static void checkBalance(Scanner sc) {
-        System.out.print("Enter Public Key: ");
+        System.out.println("Enter Public Key: ");
         String pubKeyHex = sc.nextLine();
 
-        try (Socket socket = new Socket(MINER_IP, MINER_PORT)){
-        ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+        try (Socket socket = new Socket(MINER_IP, port)){
+            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+            out.flush(); // Send header immediately
+
+
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
 
             out.writeObject("GET_BALANCE:" + pubKeyHex);
+            out.flush();
+
             double balance = (double) in.readObject();
             System.out.println("Current Balance: " + balance + " coins.");
             } catch (Exception e){
@@ -80,7 +88,7 @@ public class UserClient {
 
             Transaction tr = Wallet.sendMoney(privKey, pubSender, pubRecipient, amount);
 
-            try (Socket socket = new Socket(MINER_IP, MINER_PORT)) {
+            try (Socket socket = new Socket(MINER_IP, port)) {
                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
                 out.writeObject(tr);
                 System.out.println("Transaction sent to Mempool!");

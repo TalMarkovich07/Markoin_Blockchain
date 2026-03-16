@@ -4,6 +4,7 @@ import logic.*;
 import model.*;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -40,27 +41,37 @@ public class MinerNode {
 
     private void handleConnection(Socket socket) {
         new Thread(() -> {
-            try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
-                while (true) {
-                    try {
-                        Object received = in.readObject();
+            try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
+                out.flush();
+                try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+                    while (true) {
+                        try {
+                            Object received = in.readObject();
+                            if (received instanceof String msg && msg.startsWith("GET_BALANCE:")) {
+                                String pubKeyHex = msg.split(":")[1];
+                                BigInteger pubKey = new BigInteger(pubKeyHex, 16);
+                                double balance = blockchain.getBalance(pubKey);
+                                out.writeObject(balance);
+                                out.flush();
+                            }
 
-                        if (received instanceof String msg) {
-                            handleStringMessage(msg, socket);
-                        } else if (received instanceof Block b) {
-                            handleReceivedBlock(b);
-                        } else if (received instanceof ArrayList<?> receivedBlocks) {
-                            handleChainSync((ArrayList<Block>) receivedBlocks);
-                        } else if (received instanceof HashSet<?> receivedPeers) {
-                            peers.addAll((HashSet<Peer>) receivedPeers);
+                            if (received instanceof String msg) {
+                                handleStringMessage(msg, socket);
+                            } else if (received instanceof Block b) {
+                                handleReceivedBlock(b);
+                            } else if (received instanceof ArrayList<?> receivedBlocks) {
+                                handleChainSync((ArrayList<Block>) receivedBlocks);
+                            } else if (received instanceof HashSet<?> receivedPeers) {
+                                peers.addAll((HashSet<Peer>) receivedPeers);
+                            }
+                        } catch (EOFException e) {
+                            break;
                         }
-                    } catch (EOFException e) {
-                        break;
                     }
                 }
             } catch (Exception e) {
-                // Connection closed
-            }
+                    // Connection closed
+                }
         }).start();
     }
 

@@ -41,7 +41,7 @@ public class Chain {
     public Double getBalance(BigInteger publicKey){
         if(balances.containsKey(publicKey))
             return balances.get(publicKey);
-        return null;
+        return 0.0;
     }
     public void updateBalance(Transaction tr){
         BigInteger sender = tr.getSenderPublicKey();
