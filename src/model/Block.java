@@ -41,7 +41,6 @@ public class Block implements Serializable {
 
         while(!block.hash.startsWith(target)){
             if(stopMiningFlag.get()){
-                System.out.println("\n[Mining Interrupted] Someone else found a block.");
                 return null;
             }
             block.nonce++;

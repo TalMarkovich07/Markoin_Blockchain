@@ -131,4 +131,46 @@ public class Chain {
     public Block lastBlock(){
         return Blockchain.get(Blockchain.size()-1);
     }
+
+    public ArrayList<Block> getBlockchain(){
+        return Blockchain;
+    }
+    public void replaceChain(ArrayList<Block> newChain){
+        if (isChainValid(newChain) && newChain.size() > this.Blockchain.size()) {
+            this.Blockchain = new ArrayList<>(newChain);
+            recalculateBalances();
+        }
+    }
+    public boolean isChainValid(ArrayList<Block> chainToValidate){
+        if (chainToValidate == null || chainToValidate.isEmpty()) return false;
+
+        for (int i = 1; i < chainToValidate.size(); i++) {
+            Block current = chainToValidate.get(i);
+            Block previous = chainToValidate.get(i - 1);
+
+            if (!current.getPreviousHash().equals(previous.getHash())) return false;
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("1".repeat(difficulty));
+            if (!current.getHash().startsWith(sb.toString())) return false;
+
+            if (!verifySolution(previous.getRiddle(), current.getPreviousSolution())) return false;
+        }
+        return true;
+    }
+
+    private void recalculateBalances() {
+        balances.clear();
+        for (Block block : Blockchain) {
+            for (Transaction tr : block.getTransactions()) {
+                BigInteger sender = tr.getSenderPublicKey();
+                BigInteger recipient = tr.getRecipientPublicKey();
+                double amount = tr.getAmount();
+
+                balances.put(sender, balances.getOrDefault(sender, 0.0) - amount);
+                balances.put(recipient, balances.getOrDefault(recipient, 0.0) + amount);
+            }
+        }
+    }
+
 }
