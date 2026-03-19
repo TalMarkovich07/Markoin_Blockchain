@@ -77,26 +77,32 @@ public class UserClient {
 
     private static void sendTransaction(Scanner sc){
         try {
-            System.out.print("Your Private Key: ");
-            BigInteger privKey = new BigInteger(sc.nextLine(), 16);
             System.out.print("Your Public Key: ");
             BigInteger pubSender = new BigInteger(sc.nextLine(), 16);
             System.out.print("Recipient Public Key: ");
             BigInteger pubRecipient = new BigInteger(sc.nextLine(), 16);
             System.out.print("Amount to send: ");
             double amount = Double.parseDouble(sc.nextLine());
+            System.out.print("Enter Miner's fee: ");
+            double fee = Double.parseDouble(sc.nextLine());
+            System.out.print("Your Private Key (to sign the transaction): ");
+            BigInteger privateKey = new BigInteger(sc.nextLine(), 16);
 
-            Transaction tr = Wallet.sendMoney(privKey, pubSender, pubRecipient, amount);
+            Transaction tr = Wallet.sendMoney(privateKey, pubSender, pubRecipient, amount, fee);
+            if(tr.verifySignature()){
+                System.out.println("Transaction verification success.");
+                try (Socket socket = new Socket(MINER_IP, port)) {
+                    ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                    out.writeObject(tr);
+                    System.out.println("Transaction sent to Mempool!");
 
-            try (Socket socket = new Socket(MINER_IP, port)) {
-                ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-                out.writeObject(tr);
-                System.out.println("Transaction sent to Mempool!");
-
-            } catch (UnknownHostException e) {
+                } catch (UnknownHostException e) {
+                    throw new RuntimeException(e);
+                } catch (IOException e) {
                 throw new RuntimeException(e);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            }
+            } else  {
+                System.out.println("Transaction verification failed.");
             }
         } catch (Exception e){
             System.out.println("Transaction failed: " + e.getMessage());

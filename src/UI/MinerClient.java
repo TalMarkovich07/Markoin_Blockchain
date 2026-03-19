@@ -1,6 +1,8 @@
 package UI;
 
 import network.MinerNode;
+
+import java.math.BigInteger;
 import java.util.Scanner;
 
 public class MinerClient {
@@ -9,10 +11,10 @@ public class MinerClient {
 
         System.out.println("--- Blockchain Miner Node ---");
         System.out.print("Enter port for this node: ");
-
         int port = Integer.parseInt(sc.nextLine());
-
-        MinerNode node = new MinerNode(port);
+        System.out.print("Enter public key for this node: ");
+        BigInteger publicKey = new BigInteger(sc.nextLine(), 16);
+        MinerNode node = new MinerNode(port, publicKey);
         node.startServer();
 
         System.out.println("Node started on port " + port);

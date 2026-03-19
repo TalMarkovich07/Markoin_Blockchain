@@ -8,17 +8,20 @@ import java.math.BigInteger;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MinerNode {
     private int myPort;
+    private BigInteger myPubKey;
     private Set<Peer> peers = new HashSet<>();
     private Chain blockchain = Chain.getInstance();
     private AtomicBoolean stopMiningFlag = new AtomicBoolean(false);
 
-    public MinerNode(int port) {
+    public MinerNode(int port, BigInteger pubKey) {
         this.myPort = port;
+        this.myPubKey = pubKey;
     }
 
     public void startServer() {
@@ -64,6 +67,9 @@ public class MinerNode {
                             } else if (received instanceof HashSet<?> receivedPeers) {
                                 peers.addAll((HashSet<Peer>) receivedPeers);
                             }
+                            else if (received instanceof Transaction tr) {
+                                handleTransaction(tr);
+                            }
                         } catch (EOFException e) {
                             break;
                         }
@@ -73,6 +79,23 @@ public class MinerNode {
                     // Connection closed
                 }
         }).start();
+    }
+
+    private void handleTransaction(Transaction tr) {
+        if (!tr.verifySignature()) {
+            System.out.println("[Transaction Rejected] Invalid Signature!");
+            return;
+        }
+
+        double totalAmount = tr.getAmount() + tr.getFee();
+        if (blockchain.getBalance(tr.getSenderPublicKey()) < totalAmount) {
+            System.out.println("[Transaction Rejected] Insufficient Funds! Required: " + totalAmount);
+            return;
+        }
+
+        blockchain.getMempool().insert(tr);
+        System.out.println("[Transaction Verified & Added to Mempool]");
+        broadcast(tr);
     }
 
     private void handleStringMessage(String msg, Socket socket) {
@@ -95,6 +118,7 @@ public class MinerNode {
                 System.out.println("\n[Connection Confirmed with: " + newPeer + "]");
             }
         }
+
     }
 
     private void replyToPeer(Peer peer) {
@@ -114,6 +138,7 @@ public class MinerNode {
         if (blockchain.isValidBlock(b)) {
             blockchain.addBlock(b);
             stopMiningFlag.set(true);
+            blockchain.removeFromMempool(b.getTransactions());
             System.out.println("[Block Added to Chain]");
         }
     }
@@ -128,10 +153,20 @@ public class MinerNode {
     public void startMining() {
         stopMiningFlag.set(false);
         new Thread(() -> {
+
+            // get transactions from mempool
+            ArrayList<Transaction> transactionsToMine = new ArrayList<>();
+            while (!blockchain.getMempool().isEmpty() && transactionsToMine.size() < Block.MAX_TRANSACTIONS_PER_BLOCK)
+                transactionsToMine.add(blockchain.getMempool().extractMax());
+
+            // add reward transaction
+            Transaction rewardTx = new Transaction(null, this.myPubKey, Block.reward, 0.0);
+            transactionsToMine.addFirst(rewardTx);
+
+
             System.out.println("[Mining Started...]");
             long startTime = System.currentTimeMillis();
-
-            Block newBlock = Block.mineBlock(new ArrayList<>(), blockchain.lastBlock(), stopMiningFlag);
+            Block newBlock = Block.mineBlock(transactionsToMine, blockchain.lastBlock(), stopMiningFlag);
 
             if (newBlock != null) {
                 long duration = System.currentTimeMillis() - startTime;
@@ -139,8 +174,13 @@ public class MinerNode {
                 blockchain.addBlock(newBlock);
                 broadcast(newBlock);
             } else {
+                for( Transaction t : transactionsToMine) // if t is not in the last block, re-add it to mempool
+                    if(!blockchain.lastBlock().getData().contains(t))
+                        blockchain.getMempool().insert(t);
+
                 System.out.println("\n[Mining Interrupted] A block was received from the network.");
             }
+            //startMining();
         }).start();
     }
 

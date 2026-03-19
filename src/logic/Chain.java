@@ -1,6 +1,7 @@
 package logic;
 
 import model.Block;
+import model.MaxHeap;
 import model.Transaction;
 
 import java.util.ArrayList;
@@ -15,12 +16,12 @@ public class Chain {
     private static Chain instance;
     private HashMap<BigInteger, Double> balances;
     private ArrayList<Block> Blockchain;
-    private ArrayList<Transaction> Mempool; //this will store all transactions that haven't been added to a block yet
+    private MaxHeap<Transaction> Mempool; //this will store all transactions that haven't been added to a block yet
 
     private Chain(){
         balances = new HashMap<>();
         Blockchain = new ArrayList<>();
-        Mempool = new ArrayList<>();
+        Mempool = new MaxHeap<>();
 
         Block first = firstBlock();
         Blockchain.add(first);
@@ -34,47 +35,38 @@ public class Chain {
 
     public void addWallet(BigInteger publicKey){
         if(balances.containsKey(publicKey))
-            throw new RuntimeException("cryptography.Wallet already exists");
+            throw new RuntimeException("Wallet already exists");
         balances.put(publicKey, 0.0);
     }
 
     public Double getBalance(BigInteger publicKey){
         if(balances.containsKey(publicKey))
             return balances.get(publicKey);
+        balances.put(publicKey, 0.0);
         return 0.0;
     }
     public void updateBalance(Transaction tr){
         BigInteger sender = tr.getSenderPublicKey();
         BigInteger receiver = tr.getRecipientPublicKey();
         Double amount = tr.getAmount();
-        if(!balances.containsKey(sender))
-            throw new RuntimeException("sender does not exist");
-        if(!balances.containsKey(receiver))
-            throw new RuntimeException("receiver does not exist");
-        if(balances.get(sender) < amount)
-            throw new RuntimeException("sender is out of balance");
 
-        balances.put(sender, balances.get(sender) - amount);
-        balances.put(receiver, balances.get(receiver) + amount);
+        if(sender == null)
+            balances.put(receiver, getBalance(receiver)+amount);
+        else{
+            if(!balances.containsKey(sender))
+                throw new RuntimeException("sender does not exist");
+            if(!balances.containsKey(receiver))
+                balances.put(receiver, 0.0);
+            if(balances.get(sender) < amount)
+                throw new RuntimeException("sender is out of balance");
+
+            balances.put(sender, balances.get(sender) - amount - tr.getFee());
+            balances.put(receiver, balances.get(receiver) + amount);
+
+        }
 
     }
-    public void transferAmount(Transaction tr) {
-        BigInteger from = tr.getSenderPublicKey();
-        BigInteger to = tr.getRecipientPublicKey();
-        Double amount = tr.getAmount();
 
-        Double sender = balances.get(from);
-        Double receiver = balances.get(to);
-
-        if (!balances.containsKey(from))
-            throw new RuntimeException("Non-existing sender"); // later change to a custom exception
-        if(!balances.containsKey(to))
-            throw new RuntimeException("Non-existing receiver"); // later change to a custom exception
-
-
-        balances.put(from, sender-amount);
-        balances.put(to, receiver+amount);
-    }
     public boolean isValidBlock(Block block){
         //checks if: solution to previous block is valid, if the hash is valid, if the previous hash is really the previous block's hash, and if all transactions are valid.
         Block last = Blockchain.getLast();
@@ -93,27 +85,36 @@ public class Chain {
         if(!last.getHash().equals(block.getPreviousHash()))
             return false;
 
-        // validate each transaction (signature and double spending)
+
         ArrayList<Transaction> transactions = block.getTransactions();
+        // validate first transaction
+        Transaction coinbase = transactions.get(0);
+        if (coinbase.getSenderPublicKey() != null) return false; // coinbase transaction must have no sender
+        if (coinbase.getAmount() != Block.reward) return false;
+
+        // validate the rest transaction (signature and double spending)
         HashMap<BigInteger, Double> tempBalances = new HashMap<>(this.balances);
-        for(Transaction tr : transactions){
-            if(!tr.verifySignature())
+
+        BigInteger miner = coinbase.getRecipientPublicKey();
+        tempBalances.put(miner, tempBalances.getOrDefault(miner, 0.0) + coinbase.getAmount());//adds miner his reward
+        for (int i = 1; i < transactions.size(); i++){
+            if(!transactions.get(i).verifySignature())
                 return false;
 
-            BigInteger sender = tr.getSenderPublicKey();
-            BigInteger recipient = tr.getRecipientPublicKey();
+            BigInteger sender = transactions.get(i).getSenderPublicKey();
+            BigInteger recipient = transactions.get(i).getRecipientPublicKey();
             if(!tempBalances.containsKey(sender))
                 throw new RuntimeException("Non-existing sender");
             if(!tempBalances.containsKey(recipient))
                 throw new RuntimeException("Non-existing recipient");
 
-            double amount = tr.getAmount();
+            double amount = transactions.get(i).getAmount();
 
-            double senderBalance = tempBalances.get(sender);
+            double senderBalance = tempBalances.getOrDefault(sender, 0.0);
             if(amount > senderBalance)
                 return false;
             tempBalances.put(sender, senderBalance - amount);
-            tempBalances.put(recipient, tempBalances.get(recipient) + amount);
+            tempBalances.put(recipient, tempBalances.getOrDefault(recipient, 0.0) + amount);
         }
 
         return true;
@@ -129,9 +130,8 @@ public class Chain {
             System.out.println(block.toString());
     }
     public Block lastBlock(){
-        return Blockchain.get(Blockchain.size()-1);
+        return Blockchain.getLast();
     }
-
     public ArrayList<Block> getBlockchain(){
         return Blockchain;
     }
@@ -159,10 +159,27 @@ public class Chain {
         return true;
     }
 
+    public void removeFromMempool(ArrayList<Transaction> transactionsInBlock){
+        if (Mempool.isEmpty() || transactionsInBlock == null) return;
+
+        MaxHeap<Transaction> updatedMempool = new MaxHeap<>();
+        while(!Mempool.isEmpty()){
+            Transaction cur = Mempool.extractMax();
+
+            if(!transactionsInBlock.contains(cur))
+                updatedMempool.insert(cur);
+        }
+        this.Mempool = updatedMempool;
+        System.out.println("[Mempool Updated] Transactions already in block were removed.");
+    }
+
     private void recalculateBalances() {
         balances.clear();
         for (Block block : Blockchain) {
-            for (Transaction tr : block.getTransactions()) {
+            ArrayList<Transaction> txs = block.getTransactions();
+            balances.put(txs.getFirst().getRecipientPublicKey(), balances.get(txs.getFirst().getRecipientPublicKey()) + txs.getFirst().getAmount());
+            for (int i = 1; i < txs.size(); i++) {
+                Transaction tr = txs.get(i);
                 BigInteger sender = tr.getSenderPublicKey();
                 BigInteger recipient = tr.getRecipientPublicKey();
                 double amount = tr.getAmount();
@@ -171,6 +188,10 @@ public class Chain {
                 balances.put(recipient, balances.getOrDefault(recipient, 0.0) + amount);
             }
         }
+    }
+
+    public MaxHeap<Transaction> getMempool() {
+        return Mempool;
     }
 
 }

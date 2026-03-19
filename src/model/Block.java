@@ -1,6 +1,7 @@
 package model;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -12,6 +13,9 @@ import static model.Graph.generateGraph;
 
 public class Block implements Serializable {
     public static int difficulty = 6;
+    public static final int MAX_TRANSACTIONS_PER_BLOCK = 5;
+    public static final Double reward = 3.125;
+
     private long timeStamp;
     private String hash;
     private String previousHash;
@@ -20,6 +24,9 @@ public class Block implements Serializable {
 
     private List<Integer> previousSolution;
     private Graph riddle;
+
+
+
 
     public static Block firstBlock(){
         return new Block();
@@ -75,7 +82,7 @@ public class Block implements Serializable {
         return this.data;
     }
 
-    private String calculateBlockHash(){
+    public String calculateBlockHash(){
         // converts a block's info to string and returns it's hash
         String str = timeStamp +
                 previousHash +
@@ -103,7 +110,6 @@ public class Block implements Serializable {
     public ArrayList<Transaction> getData(){ return data; }
     public List<Integer> getPreviousSolution(){ return previousSolution; }
     public Graph getRiddle(){ return riddle; }
-
     public String toString(){
         String str = "";
         str+=timeStamp;
