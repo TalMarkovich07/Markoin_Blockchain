@@ -46,33 +46,36 @@ public class MinerNode {
         new Thread(() -> {
             try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
                 out.flush();
-                try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
-                    while (true) {
-                        try {
-                            Object received = in.readObject();
-                            if (received instanceof String msg && msg.startsWith("GET_BALANCE:")) {
-                                String pubKeyHex = msg.split(":")[1];
-                                BigInteger pubKey = new BigInteger(pubKeyHex, 16);
-                                double balance = blockchain.getBalance(pubKey);
-                                out.writeObject(balance);
-                                out.flush();
-                            }
+                ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
 
-                            if (received instanceof String msg) {
-                                handleStringMessage(msg, socket);
-                            } else if (received instanceof Block b) {
-                                handleReceivedBlock(b);
-                            } else if (received instanceof ArrayList<?> receivedBlocks) {
-                                handleChainSync((ArrayList<Block>) receivedBlocks);
-                            } else if (received instanceof HashSet<?> receivedPeers) {
-                                peers.addAll((HashSet<Peer>) receivedPeers);
-                            }
-                            else if (received instanceof Transaction tr) {
-                                handleTransaction(tr);
-                            }
-                        } catch (EOFException e) {
-                            break;
+                if(socket.getLocalPort() != myPort) {
+                    out.writeObject("HELLO:"+ myPort);
+                    out.flush();
+                }
+
+                while (true) {
+                    try {
+                        Object received = in.readObject();
+                        if (received instanceof String msg && msg.startsWith("GET_BALANCE:")) {
+                            // send balance to user
+                            String pubKeyHex = msg.split(":")[1];
+                            BigInteger pubKey = new BigInteger(pubKeyHex, 16);
+                            double balance = blockchain.getBalance(pubKey);
+                            out.writeObject(balance);
+                            out.flush();
                         }
+
+                        if (received instanceof String msg) {
+                            handleStringMessage(msg, socket, in, out);
+                        } else if (received instanceof Block b) {
+                            handleReceivedBlock(b);
+                        } else if (received instanceof ArrayList<?> receivedBlocks) {
+                            handleChainSync((ArrayList<Block>) receivedBlocks, out);
+                        } else if (received instanceof Transaction tr) {
+                            handleTransaction(tr);
+                        }
+                    } catch (EOFException e) {
+                        break;
                     }
                 }
             } catch (Exception e) {
@@ -98,40 +101,48 @@ public class MinerNode {
         broadcast(tr);
     }
 
-    private void handleStringMessage(String msg, Socket socket) {
-        if (msg.startsWith("HELLO:")) {
-            int senderPort = Integer.parseInt(msg.split(":")[1]);
-            String senderIp = socket.getInetAddress().getHostAddress();
-            Peer newPeer = new Peer(senderIp, senderPort);
+    private void handleStringMessage(String msg, Socket socket, ObjectInputStream in, ObjectOutputStream out) {
+        try {
+            if (msg.startsWith("HELLO:")) {
+                // Step 1 & 2: Process HELLO and send HELLO_BACK
+                int senderPort = Integer.parseInt(msg.split(":")[1]);
+                String senderIp = socket.getInetAddress().getHostAddress();
+                Peer newPeer = new Peer(senderIp, senderPort);
+                if(peers.add(newPeer)){
+                    System.out.println("[INFO] added new peer: "+ newPeer);
+                }
+                else{
+                    System.out.println("[ERROR] peer "+newPeer+" already exists!");
+                }
 
-            if (peers.add(newPeer)) {
-                System.out.println("\n[New Peer Discovered: " + newPeer + "]");
-                // Reply so they add me too
-                replyToPeer(newPeer);
-            }
-        } else if (msg.startsWith("HELLO_BACK:")) {
-            int senderPort = Integer.parseInt(msg.split(":")[1]);
-            String senderIp = socket.getInetAddress().getHostAddress();
-            Peer newPeer = new Peer(senderIp, senderPort);
+                System.out.println("\n[INFO] Received HELLO from " + newPeer);
+                System.out.println("[INFO] Sending HELLO_BACK to " + newPeer);
+                out.writeObject("HELLO_BACK:" + myPort);
+                out.flush();
 
-            if (peers.add(newPeer)) {
-                System.out.println("\n[Connection Confirmed with: " + newPeer + "]");
             }
+            else if (msg.startsWith("HELLO_BACK:")) {
+                int senderPort = Integer.parseInt(msg.split(":")[1]);
+                String senderIp = socket.getInetAddress().getHostAddress();
+                Peer peer = new Peer(senderIp, senderPort);
+                System.out.println("[INFO] Received HELLO_BACK from " + peer);
+                if(peers.add(peer))
+                    System.out.println("[INFO] Added peer: " + peer);
+                else
+                    System.out.println("[INFO] Failed to add peer: " + peer);
+
+                // Send My Blockchain
+                System.out.println("[INFO] Sending Blockchain to " + peer);
+                out.reset();
+                out.writeObject(blockchain.getBlockchain());
+                out.flush();
+
+            }
+        } catch (Exception e) {
+            System.out.println("[Error] Handshake logic error: " + e.getMessage());
         }
-
     }
 
-    private void replyToPeer(Peer peer) {
-        try (Socket socket = new Socket(peer.getIp(), peer.getPort());
-             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-            out.writeObject("HELLO_BACK:" + myPort);
-            out.writeObject(new HashSet<>(peers));
-            out.writeObject(blockchain.getBlockchain());
-            out.flush();
-        } catch (IOException e) {
-            peers.remove(peer);
-        }
-    }
 
     private void handleReceivedBlock(Block b) {
         System.out.println("\n[Block Received] Hash: " + b.getHash());
@@ -143,10 +154,26 @@ public class MinerNode {
         }
     }
 
-    private void handleChainSync(ArrayList<Block> newChain) {
+    private void handleChainSync(ArrayList<Block> newChain, ObjectOutputStream out) {
         if (newChain.size() > blockchain.getBlockchain().size()) {
             blockchain.replaceChain(newChain);
-            System.out.println("\n[Chain Synchronized] New length: " + newChain.size());
+            System.out.println("[INFO] Chain synced");
+        }
+        else if(newChain.size() == blockchain.getBlockchain().size()){
+            if(newChain!=blockchain.getBlockchain())
+                System.out.println("[INFO] Chain was correct");
+            else
+                System.out.println("[ERROR] Different chains, same size.");
+        }
+        else {
+            //My chain is longer, sending my chain.
+            try {
+                out.reset(); // Ensures the updated list is sent, not a cached version
+                out.writeObject(blockchain.getBlockchain());
+                out.flush();
+            } catch (Exception e) {
+                System.out.println("[ERROR] " + e.getMessage());
+            }
         }
     }
 
@@ -185,21 +212,27 @@ public class MinerNode {
     }
 
     public void connectToPeer(String ip, int port) {
-        Peer peer = new Peer(ip, port);
-        if (peers.add(peer)) {
-            syncWithPeer(peer);
+        try{
+            Socket socket = new Socket(ip, port);
+            handleConnection(socket);
+        } catch (IOException e) {
+            System.out.println("[ERROR] Could not connect to peer: " + e.getMessage());
         }
     }
-
-    private void syncWithPeer(Peer peer) {
+    private void sendHello(Peer peer){
         try (Socket socket = new Socket(peer.getIp(), peer.getPort());
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-            out.writeObject("HELLO:" + myPort);
-            out.writeObject(new HashSet<>(peers));
-            out.writeObject(blockchain.getBlockchain());
             out.flush();
-        } catch (IOException e) {
-            peers.remove(peer);
+            try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+
+                // Step 1: Send HELLO
+                out.writeObject("HELLO:" + myPort);
+                out.flush();
+            } catch (IOException e) {
+                System.out.println("[ERROR] " + e.getMessage());
+            }
+        }  catch (IOException e) {
+            System.out.println("[ERROR] " + e.getMessage());
         }
     }
 

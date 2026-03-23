@@ -138,7 +138,13 @@ public class Chain {
     public void replaceChain(ArrayList<Block> newChain){
         if (isChainValid(newChain) && newChain.size() > this.Blockchain.size()) {
             this.Blockchain = new ArrayList<>(newChain);
-            recalculateBalances();
+            System.out.println("[INFO] Chain Replaced");
+            try{
+                recalculateBalances();
+                System.out.println("[INFO] Balances updated.");
+            } catch(Exception e){
+                System.out.println("[ERROR] Balances exception: " + e.getMessage());
+            }
         }
     }
     public boolean isChainValid(ArrayList<Block> chainToValidate){
@@ -175,8 +181,10 @@ public class Chain {
 
     private void recalculateBalances() {
         balances.clear();
-        for (Block block : Blockchain) {
-            ArrayList<Transaction> txs = block.getTransactions();
+        for (int j = 1; j < Blockchain.size(); j++) {
+            ArrayList<Transaction> txs = Blockchain.get(j).getTransactions();
+            if(!balances.containsKey(txs.getFirst().getRecipientPublicKey()))
+                balances.put(txs.getFirst().getRecipientPublicKey(), 0.0);
             balances.put(txs.getFirst().getRecipientPublicKey(), balances.get(txs.getFirst().getRecipientPublicKey()) + txs.getFirst().getAmount());
             for (int i = 1; i < txs.size(); i++) {
                 Transaction tr = txs.get(i);
@@ -184,7 +192,12 @@ public class Chain {
                 BigInteger recipient = tr.getRecipientPublicKey();
                 double amount = tr.getAmount();
 
-                balances.put(sender, balances.getOrDefault(sender, 0.0) - amount);
+                if(!balances.containsKey(sender))
+                    throw new RuntimeException("Non-existing sender");
+                if(!balances.containsKey(recipient))
+                    balances.put(recipient, 0.0);
+
+                balances.put(sender, balances.getOrDefault(sender, 0.0) - amount - tr.getFee());
                 balances.put(recipient, balances.getOrDefault(recipient, 0.0) + amount);
             }
         }
