@@ -44,6 +44,10 @@ public class MinerNode {
 
     private void handleConnection(Socket socket) {
         new Thread(() -> {
+
+            // Initialize with -1 port until HELLO is received
+            Peer remotePeer = new Peer(socket.getInetAddress().getHostAddress(), -1);
+
             try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
                 out.flush();
                 ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
@@ -56,23 +60,28 @@ public class MinerNode {
                 while (true) {
                     try {
                         Object received = in.readObject();
-                        if (received instanceof String msg && msg.startsWith("GET_BALANCE:")) {
-                            // send balance to user
-                            String pubKeyHex = msg.split(":")[1];
-                            BigInteger pubKey = new BigInteger(pubKeyHex, 16);
-                            double balance = blockchain.getBalance(pubKey);
-                            out.writeObject(balance);
-                            out.flush();
-                        }
 
                         if (received instanceof String msg) {
+                            if (msg.startsWith("GET_BALANCE:")) {
+                                // send balance to user
+                                String pubKeyHex = msg.split(":")[1];
+                                BigInteger pubKey = new BigInteger(pubKeyHex, 16);
+                                double balance = blockchain.getBalance(pubKey);
+                                out.writeObject(balance);
+                                out.flush();
+                            }
+                            if (msg.startsWith("HELLO:")) {
+                                // Update the remotePeer with the actual listening port
+                                int senderPort = Integer.parseInt(msg.split(":")[1]);
+                                remotePeer = new Peer(remotePeer.getIp(), senderPort);
+                            }
                             handleStringMessage(msg, socket, in, out);
                         } else if (received instanceof Block b) {
-                            handleReceivedBlock(b);
+                            handleReceivedBlock(b, remotePeer);
                         } else if (received instanceof ArrayList<?> receivedBlocks) {
                             handleChainSync((ArrayList<Block>) receivedBlocks, out);
                         } else if (received instanceof Transaction tr) {
-                            handleTransaction(tr);
+                            handleTransaction(tr, remotePeer);
                         }
                     } catch (EOFException e) {
                         break;
@@ -84,7 +93,7 @@ public class MinerNode {
         }).start();
     }
 
-    private void handleTransaction(Transaction tr) {
+    private void handleTransaction(Transaction tr, Peer remotePeer) {
         if (!tr.verifySignature()) {
             System.out.println("[Transaction Rejected] Invalid Signature!");
             return;
@@ -98,7 +107,7 @@ public class MinerNode {
 
         blockchain.getMempool().insert(tr);
         System.out.println("[Transaction Verified & Added to Mempool]");
-        broadcast(tr);
+        broadcast(tr, remotePeer);
     }
 
     private void handleStringMessage(String msg, Socket socket, ObjectInputStream in, ObjectOutputStream out) {
@@ -144,13 +153,20 @@ public class MinerNode {
     }
 
 
-    private void handleReceivedBlock(Block b) {
+    private void handleReceivedBlock(Block b, Peer remotePeer) {
         System.out.println("\n[Block Received] Hash: " + b.getHash());
+        if(blockchain.getBlockchain().stream().anyMatch(block -> block.getHash().equals(b.getHash()))) {
+            System.out.println("[ERROR] Block already exists!");
+            return;
+        }
         if (blockchain.isValidBlock(b)) {
             blockchain.addBlock(b);
             stopMiningFlag.set(true);
             blockchain.removeFromMempool(b.getTransactions());
             System.out.println("[Block Added to Chain]");
+
+            // Send block to all peers
+            broadcast(b, remotePeer);
         }
     }
 
@@ -199,7 +215,7 @@ public class MinerNode {
                 long duration = System.currentTimeMillis() - startTime;
                 System.out.println("\n[Block Mined Successfully!] Time: " + duration + "ms");
                 blockchain.addBlock(newBlock);
-                broadcast(newBlock);
+                broadcast(newBlock, null);
             } else {
                 for( Transaction t : transactionsToMine) // if t is not in the last block, re-add it to mempool
                     if(!blockchain.lastBlock().getData().contains(t))
@@ -236,15 +252,23 @@ public class MinerNode {
         }
     }
 
-    public void broadcast(Object data) {
+    public void broadcast(Object data, Peer avoid) {
+        System.out.println("[INFO] Broadcasting " + data.getClass());
         for (Peer peer : peers) {
-            try (Socket socket = new Socket(peer.getIp(), peer.getPort());
-                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-                out.writeObject(data);
-                out.flush();
-            } catch (IOException e) {
-                System.out.println("Could not reach peer: " + peer);
+            if(avoid != null && peer.getPort() == avoid.getPort())
+                System.out.println("[INFO] avoiding peer "+ peer);
+            else{
+                System.out.println("[INFO] trying peer:" + peer);
+                try (Socket socket = new Socket(peer.getIp(), peer.getPort());
+                     ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
+                    out.writeObject(data);
+                    System.out.println("[INFO] Sent to peer: " + peer);
+                    out.flush();
+                } catch (IOException e) {
+                    System.out.println("[ERROR] Could not reach peer: " + peer);
+                }
             }
+
         }
     }
 
